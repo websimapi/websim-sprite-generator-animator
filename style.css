@@ -114,6 +114,41 @@ canvas {
   font-style: italic;
 }
 
+.preview-box {
+  background-color: #fff;
+  border-radius: 8px;
+  padding: 10px;
+  margin: 10px 0;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+.preview-box h4 {
+  margin-top: 0;
+  margin-bottom: 10px;
+  color: #4a5568;
+  text-align: center;
+}
+
+#animation-preview {
+  display: flex;
+  justify-content: space-between;
+  gap: 15px;
+}
+
+#animation-preview-container {
+  margin-top: 15px;
+  padding: 10px;
+  border-top: 1px solid #eee;
+}
+
+#idle-preview, #walk-preview {
+  height: 150px;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
 @media (min-width: 768px) {
   .container {
     flex-direction: row;
@@ -131,4 +166,3 @@ canvas {
     flex: 0.7;
   }
 }
-

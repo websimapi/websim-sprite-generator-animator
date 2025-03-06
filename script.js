@@ -99,7 +99,8 @@ class SpriteGenerator {
               }
             ]
           }
-        ]
+        ],
+        json: true  // Request JSON response
       });
 
       try {
@@ -129,7 +130,12 @@ class SpriteGenerator {
       }
       
       console.log("Animation data:", this.animationData);
-      // Show the use sprite button
+      
+      // Create animation preview
+      gameScene.createAnimationPreview(this.generatedImageUrl, this.animationData);
+      
+      // Show the animation preview and use sprite button
+      document.getElementById('animation-preview-container').classList.remove('hidden');
       document.getElementById('use-sprite-btn').classList.remove('hidden');
       
     } catch (error) {
@@ -192,6 +198,8 @@ class GameScene {
     this.player = null;
     this.keyboard = {};
     this.initialized = false;
+    this.previewApp = null;
+    this.previewSprite = null;
   }
 
   initialize(spriteUrl, animationData) {
@@ -200,30 +208,47 @@ class GameScene {
     }
 
     // Initialize PIXI Application
+    const gameContainer = document.getElementById('game-container');
     this.app = new PIXI.Application({
-      width: document.getElementById('game-container').clientWidth,
-      height: document.getElementById('game-container').clientHeight,
+      width: gameContainer.clientWidth,
+      height: gameContainer.clientHeight,
       backgroundColor: 0x88ccff,
       resolution: window.devicePixelRatio || 1,
+      antialias: true
     });
 
+    document.getElementById('game-canvas').innerHTML = '';
     document.getElementById('game-canvas').appendChild(this.app.view);
     
     // Create a simple ground
     const ground = new PIXI.Graphics();
     ground.beginFill(0x567d46);
-    ground.drawRect(0, this.app.screen.height - 50, this.app.screen.width, 50);
+    ground.drawRect(0, this.app.renderer.height - 50, this.app.renderer.width, 50);
     ground.endFill();
     this.app.stage.addChild(ground);
 
     // Load the player sprite
-    PIXI.Assets.load(spriteUrl).then(texture => {
+    this.loadSpriteTexture(spriteUrl).then(texture => {
       this.setupPlayer(texture, animationData);
       this.setupKeyboardControls();
       this.startGameLoop();
     });
 
     this.initialized = true;
+  }
+
+  async loadSpriteTexture(url) {
+    try {
+      return await PIXI.Assets.load(url);
+    } catch (error) {
+      console.error("Error loading sprite texture:", error);
+      // Create a fallback texture (red square)
+      const graphics = new PIXI.Graphics();
+      graphics.beginFill(0xFF0000);
+      graphics.drawRect(0, 0, 64, 64);
+      graphics.endFill();
+      return this.app.renderer.generateTexture(graphics);
+    }
   }
 
   setupPlayer(texture, animationData) {
@@ -239,13 +264,13 @@ class GameScene {
     this.player.anchor.set(0.5);
     
     // Position the player
-    this.player.x = this.app.screen.width / 2;
-    this.player.y = this.app.screen.height - 50 - this.player.height / 2;
+    this.player.x = this.app.renderer.width / 2;
+    this.player.y = this.app.renderer.height - 50 - this.player.height / 2;
     
     // Add player properties
     this.player.vx = 0;
     this.player.vy = 0;
-    this.player.movementSpeed = animationData.movementSpeed;
+    this.player.movementSpeed = animationData.movementSpeed || 150;
     this.player.isWalking = false;
     this.player.direction = 1; // 1 for right, -1 for left
     
@@ -282,11 +307,11 @@ class GameScene {
     
     // Update animation timer
     this.player.animationTimer += delta;
-    const frameDuration = 60 / animation.frameRate;
+    const frameDuration = 60 / (animation.frameRate || 6);
     
     if (this.player.animationTimer > frameDuration) {
       this.player.animationTimer = 0;
-      this.player.animationFrame = (this.player.animationFrame + 1) % animation.frameCount;
+      this.player.animationFrame = (this.player.animationFrame + 1) % (animation.frameCount || 2);
       
       // Apply transformations based on current frame
       this.applyAnimationFrame(animation, this.player.animationFrame);
@@ -363,8 +388,8 @@ class GameScene {
     // Keep player within screen bounds
     if (this.player.x < this.player.width / 2) {
       this.player.x = this.player.width / 2;
-    } else if (this.player.x > this.app.screen.width - this.player.width / 2) {
-      this.player.x = this.app.screen.width - this.player.width / 2;
+    } else if (this.player.x > this.app.renderer.width - this.player.width / 2) {
+      this.player.x = this.app.renderer.width - this.player.width / 2;
     }
     
     // Update animation
@@ -373,15 +398,136 @@ class GameScene {
 
   cleanup() {
     if (this.app) {
-      this.app.destroy(true, true);
+      this.app.destroy(true, { children: true });
       this.app = null;
       this.player = null;
       this.initialized = false;
+    }
+    
+    if (this.previewApp) {
+      this.previewApp.destroy(true, { children: true });
+      this.previewApp = null;
+      this.previewSprite = null;
+    }
+  }
+
+  createAnimationPreview(spriteUrl, animationData) {
+    if (this.previewApp) {
+      this.previewApp.destroy(true, { children: true });
+    }
+
+    const previewContainer = document.getElementById('animation-preview');
+    previewContainer.innerHTML = '';
+    
+    // Create idle and walk preview containers
+    const idleContainer = document.createElement('div');
+    idleContainer.className = 'preview-box';
+    idleContainer.innerHTML = '<h4>Idle Animation</h4><div id="idle-preview"></div>';
+    
+    const walkContainer = document.createElement('div');
+    walkContainer.className = 'preview-box';
+    walkContainer.innerHTML = '<h4>Walk Animation</h4><div id="walk-preview"></div>';
+    
+    previewContainer.appendChild(idleContainer);
+    previewContainer.appendChild(walkContainer);
+    
+    // Create idle animation preview
+    this.createPreviewAnimation('idle-preview', spriteUrl, animationData, false);
+    
+    // Create walk animation preview
+    this.createPreviewAnimation('walk-preview', spriteUrl, animationData, true);
+  }
+
+  async createPreviewAnimation(containerId, spriteUrl, animationData, isWalking) {
+    const container = document.getElementById(containerId);
+    const previewApp = new PIXI.Application({
+      width: 150,
+      height: 150,
+      backgroundColor: isWalking ? 0xDDEEFF : 0xEEFFEE,
+      resolution: window.devicePixelRatio || 1,
+      antialias: true
+    });
+    
+    container.appendChild(previewApp.view);
+    
+    // Load texture
+    const texture = await this.loadSpriteTexture(spriteUrl);
+    
+    // Create sprite
+    const sprite = new PIXI.Sprite(texture);
+    
+    // Scale the sprite
+    const maxDimension = 80;
+    const scale = maxDimension / Math.max(sprite.width, sprite.height);
+    sprite.scale.set(scale);
+    
+    // Center the sprite
+    sprite.anchor.set(0.5);
+    sprite.x = previewApp.renderer.width / 2;
+    sprite.y = previewApp.renderer.height / 2 + 10;
+    
+    // Add animation properties
+    sprite.animationData = animationData;
+    sprite.animationState = isWalking ? "walk" : "idle";
+    sprite.animationFrame = 0;
+    sprite.animationTimer = 0;
+    sprite.isWalking = isWalking;
+    sprite.originalY = sprite.y;
+    sprite.originalTexture = texture;
+    
+    // Add to stage
+    previewApp.stage.addChild(sprite);
+    
+    // Start animation loop
+    previewApp.ticker.add((delta) => {
+      this.updatePreviewAnimation(sprite, delta);
       
-      // Remove canvas
-      const canvas = document.getElementById('game-canvas');
-      while (canvas.firstChild) {
-        canvas.removeChild(canvas.firstChild);
+      // Add walking movement for walk animation
+      if (isWalking) {
+        sprite.x += (1 * delta);
+        if (sprite.x > previewApp.renderer.width + sprite.width/2) {
+          sprite.x = -sprite.width/2;
+        }
+      }
+    });
+  }
+  
+  updatePreviewAnimation(sprite, delta) {
+    if (!sprite || !sprite.animationData) return;
+    
+    // Determine which animation to use
+    let animation = sprite.isWalking 
+      ? sprite.animationData.recommendedAnimations.walk 
+      : sprite.animationData.recommendedAnimations.idle;
+    
+    // Update animation timer
+    sprite.animationTimer += delta;
+    const frameDuration = 60 / (animation.frameRate || 6);
+    
+    if (sprite.animationTimer > frameDuration) {
+      sprite.animationTimer = 0;
+      sprite.animationFrame = (sprite.animationFrame + 1) % (animation.frameCount || 2);
+      
+      // Reset transformations
+      sprite.y = sprite.originalY;
+      sprite.scale.y = Math.abs(sprite.scale.y);
+      
+      // Apply transformations for the current animation
+      const transformations = animation.transformations;
+      if (transformations && transformations.length > 0) {
+        const transform = transformations[sprite.animationFrame % transformations.length];
+        
+        if (transform.includes("bob") || transform.includes("up")) {
+          sprite.y -= 3;
+        } else if (transform.includes("down")) {
+          sprite.y += 2;
+        }
+        
+        if (transform.includes("squash")) {
+          sprite.scale.y *= 0.9;
+        } else if (transform.includes("stretch")) {
+          sprite.scale.y *= 1.1;
+        }
       }
     }
   }
@@ -402,13 +548,13 @@ window.addEventListener('resize', () => {
     // Reposition the ground
     if (gameScene.app.stage.children.length > 0) {
       const ground = gameScene.app.stage.children[0];
-      ground.width = gameScene.app.screen.width;
-      ground.y = gameScene.app.screen.height - 50;
+      ground.width = gameScene.app.renderer.width;
+      ground.y = gameScene.app.renderer.height - 50;
     }
     
     // Reposition the player
     if (gameScene.player) {
-      gameScene.player.originalY = gameScene.app.screen.height - 50 - gameScene.player.height / 2;
+      gameScene.player.originalY = gameScene.app.renderer.height - 50 - gameScene.player.height / 2;
       gameScene.player.y = gameScene.player.originalY;
     }
   }
