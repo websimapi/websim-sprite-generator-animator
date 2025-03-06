@@ -65,34 +65,33 @@ class SpriteGenerator {
           {
             role: "system",
             content: `You are an AI that analyzes game sprites and determines appropriate animations. 
-            Based on the image and description, you will provide animation data for a 2D game character.
-            Respond directly with JSON, following this JSON schema, and no other text.
-            {
-              "spriteType": "character type (e.g. human, monster, animal)",
-              "animationStyle": "pixel", 
-              "recommendedAnimations": {
-                "idle": {
-                  "description": "description of idle animation",
-                  "frameCount": number between 2-4,
-                  "frameRate": number between 4-10,
-                  "transformations": ["slight movements to apply to sprite for animation"]
-                },
-                "walk": {
-                  "description": "description of walking animation",
-                  "frameCount": number between 2-6,
-                  "frameRate": number between 5-12,
-                  "transformations": ["slight movements to apply to sprite for animation"]
-                }
-              },
-              "movementSpeed": number between 100-200
-            }`
+            Based on the image and description, provide animation data for a 2D game character.`
           },
           {
             role: "user",
             content: [
               {
                 type: "text",
-                text: `Analyze this sprite character described as: "${prompt}". Provide animation data for idle and walk animations.`
+                text: `Analyze this sprite character described as: "${prompt}". Provide animation data for idle and walk animations following this format:
+                {
+                  "spriteType": "character type (e.g. human, monster, animal)",
+                  "animationStyle": "pixel", 
+                  "recommendedAnimations": {
+                    "idle": {
+                      "description": "description of idle animation",
+                      "frameCount": number between 2-4,
+                      "frameRate": number between 4-10,
+                      "transformations": ["slight movements to apply to sprite for animation"]
+                    },
+                    "walk": {
+                      "description": "description of walking animation",
+                      "frameCount": number between 2-6,
+                      "frameRate": number between 5-12,
+                      "transformations": ["slight movements to apply to sprite for animation"]
+                    }
+                  },
+                  "movementSpeed": number between 100-200
+                }`
               },
               {
                 type: "image_url",
@@ -100,19 +99,64 @@ class SpriteGenerator {
               }
             ]
           }
-        ],
-        json: true
+        ]
       });
 
-      this.animationData = JSON.parse(completion.content);
-      console.log("Animation data:", this.animationData);
+      try {
+        this.animationData = JSON.parse(completion.content);
+      } catch (parseError) {
+        // Fallback animation data in case parsing fails
+        this.animationData = {
+          "spriteType": "character",
+          "animationStyle": "pixel",
+          "recommendedAnimations": {
+            "idle": {
+              "description": "Slight bobbing motion",
+              "frameCount": 2,
+              "frameRate": 6,
+              "transformations": ["bob up", "bob down"]
+            },
+            "walk": {
+              "description": "Side to side movement",
+              "frameCount": 4,
+              "frameRate": 8,
+              "transformations": ["bob up", "normal", "bob down", "normal"]
+            }
+          },
+          "movementSpeed": 150
+        };
+        console.warn("Failed to parse animation data, using fallback:", parseError);
+      }
       
+      console.log("Animation data:", this.animationData);
       // Show the use sprite button
       document.getElementById('use-sprite-btn').classList.remove('hidden');
       
     } catch (error) {
       console.error('Error analyzing sprite:', error);
-      alert('Error analyzing sprite for animation. Please try again.');
+      // Provide fallback animation data if analysis fails
+      this.animationData = {
+        "spriteType": "character",
+        "animationStyle": "pixel",
+        "recommendedAnimations": {
+          "idle": {
+            "description": "Slight bobbing motion",
+            "frameCount": 2,
+            "frameRate": 6,
+            "transformations": ["bob up", "bob down"]
+          },
+          "walk": {
+            "description": "Side to side movement",
+            "frameCount": 4,
+            "frameRate": 8,
+            "transformations": ["bob up", "normal", "bob down", "normal"]
+          }
+        },
+        "movementSpeed": 150
+      };
+      console.warn("Using fallback animation data due to analysis error");
+      // Show use sprite button despite error
+      document.getElementById('use-sprite-btn').classList.remove('hidden');
     }
   }
 
@@ -369,4 +413,3 @@ window.addEventListener('resize', () => {
     }
   }
 });
-
