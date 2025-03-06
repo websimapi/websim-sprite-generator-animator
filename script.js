@@ -200,7 +200,7 @@ class GameScene {
     }
 
     // Initialize PIXI Application
-    this.app = new PIXI.Application({
+    this.app = new PIXI.Application.create({
       width: document.getElementById('game-container').clientWidth,
       height: document.getElementById('game-container').clientHeight,
       backgroundColor: 0x88ccff,
